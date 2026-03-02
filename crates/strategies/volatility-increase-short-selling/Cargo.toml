@@ -1,0 +1,11 @@
+[package]
+name = "volatility-increase-short-selling"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]

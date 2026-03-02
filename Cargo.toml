@@ -1,0 +1,24 @@
+[workspace.package]
+name = "cluebot"
+version = "0.0.1"
+edition = "2024"
+description = "Quantitative clue bot."
+license = "MIT"
+homepage = "https://www.openpick.org"
+repository = "https://github.com/cluebot/cluebot"
+exclude = [".github/"]
+
+[workspace]
+members = [
+    "bin/cluebot"
+
+, "crates/engine", "crates/extensions/email", "crates/extensions/lark", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
+default-members = ["bin/cluebot"]
+
+[workspace.dependencies]
+# cluebot
+cluebot = { path = "bin/cluebot" }
+cluebot-runtime = { path = "crates/runtime" }
+cluebot-engine = { path = "crates/engine" }
+cluebot-email = { path = "crates/extensions/email" }
+cluebot-lark = { path = "crates/extensions/lark" }
