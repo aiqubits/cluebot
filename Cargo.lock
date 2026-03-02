@@ -19,7 +19,19 @@ name = "cluebot-lark"
 version = "0.0.1"
 
 [[package]]
+name = "cluebot-llm"
+version = "0.0.1"
+
+[[package]]
 name = "cluebot-runtime"
+version = "0.0.1"
+
+[[package]]
+name = "discovery-strategy"
+version = "0.0.1"
+
+[[package]]
+name = "strategy-creation"
 version = "0.0.1"
 
 [[package]]

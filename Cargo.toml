@@ -12,7 +12,7 @@ exclude = [".github/"]
 members = [
     "bin/cluebot"
 
-, "crates/engine", "crates/extensions/email", "crates/extensions/lark", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
+, "crates/agent/discovery-strategy", "crates/agent/llm", "crates/agent/strategy-creation", "crates/engine", "crates/extensions/email", "crates/extensions/lark", "crates/extensions/okx", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
 default-members = ["bin/cluebot"]
 
 [workspace.dependencies]
