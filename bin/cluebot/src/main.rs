@@ -81,10 +81,28 @@ async fn main() -> Result<()> {
     // 9. Create OKX market client
     let okx = Arc::new(OkxMarket::new());
 
-    // 10. Load volatility short-selling strategy (using default config)
-    let strategy = Arc::new(VolatilityIncreaseShortSellingStrategy::default_config());
+    // 10. Load volatility short-selling strategy
+    let price_change_threshold: f64 = 10.0;
+    let volatility_threshold: f64 = 0.0; // 设为0，不限制波动率，只检查涨幅
+    let min_candles: usize = 2; // 至少需要2根K线才能计算涨跌幅
+    let bar: String = "1H".to_string();
+    let limit: u32 = 8;
+    let strategy = Arc::new(VolatilityIncreaseShortSellingStrategy::new(
+        volatility_increase_short_selling::VolatilityStrategyConfig {
+            price_change_threshold,
+            volatility_threshold,
+            min_candles,
+            bar: bar.clone(),
+            limit,
+        }
+    ));
     engine.load_strategy(strategy).await?;
-    println!("Strategy loaded: VolatilityIncreaseShortSelling\n");
+    println!("Strategy loaded: VolatilityIncreaseShortSelling");
+    println!("  Price Change Threshold: {}%", price_change_threshold);
+    println!("  Volatility Threshold: {}%", volatility_threshold);
+    println!("  Min Candles: {}", min_candles);
+    println!("  Bar: {}", bar);
+    println!("  Limit: {}", limit);
 
     // 11. Start Runtime
     runtime.start().await?;
@@ -93,7 +111,7 @@ async fn main() -> Result<()> {
     // 12. Use Engine scheduler to execute strategy periodically
     engine.schedule_repeating(
         cluebot_engine::TaskType::CheckConditions,
-        Duration::from_secs(60), // Execute every 60 seconds
+        Duration::from_secs(1800), // Execute every 60 seconds
         {
             let engine = engine.clone();
             let okx = okx.clone();

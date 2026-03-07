@@ -10,12 +10,13 @@ exclude = [".github/"]
 [workspace]
 resolver = "3"
 members = [
-    "bin/cluebot", "crates/agent/discovery-strategy", "crates/agent/strategy-creation", "crates/agent/strategy-optimization", "crates/engine", "crates/extensions/markets/binance", "crates/extensions/channels/email", "crates/extensions/channels/lark", "crates/extensions/markets/okx", "crates/llm-gateway", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
+    "bin/cluebot", "bin/demo", "crates/agent/discovery-strategy", "crates/agent/strategy-creation", "crates/agent/strategy-optimization", "crates/engine", "crates/extensions/markets/binance", "crates/extensions/channels/email", "crates/extensions/channels/lark", "crates/extensions/markets/okx", "crates/llm-gateway", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
 default-members = ["bin/cluebot"]
 
 [workspace.dependencies]
 # cluebot internal crates
 cluebot = { path = "bin/cluebot" }
+demo = { path = "bin/demo" }
 cluebot-runtime = { path = "crates/runtime" }
 cluebot-engine = { path = "crates/engine" }
 cluebot-email = { path = "crates/extensions/channels/email" }

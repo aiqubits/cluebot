@@ -14,6 +14,10 @@ pub struct VolatilityStrategyConfig {
     pub volatility_threshold: f64,
     /// 最小 K 线数量
     pub min_candles: usize,
+    /// K 线周期 (如 "1H", "4H", "1D")
+    pub bar: String,
+    /// 获取 K 线数量
+    pub limit: u32,
 }
 
 impl Default for VolatilityStrategyConfig {
@@ -22,6 +26,8 @@ impl Default for VolatilityStrategyConfig {
             price_change_threshold: 10.0,
             volatility_threshold: 5.0,
             min_candles: 8,
+            bar: "1H".to_string(),
+            limit: 8,
         }
     }
 }
@@ -33,6 +39,8 @@ impl VolatilityStrategyConfig {
             price_change_threshold: 15.0,
             volatility_threshold: 8.0,
             min_candles: 10,
+            bar: "4H".to_string(),
+            limit: 12,
         }
     }
 
@@ -42,6 +50,8 @@ impl VolatilityStrategyConfig {
             price_change_threshold: 5.0,
             volatility_threshold: 3.0,
             min_candles: 5,
+            bar: "1H".to_string(),
+            limit: 8,
         }
     }
 }
@@ -92,13 +102,19 @@ impl VolatilityIncreaseShortSellingStrategy {
     }
 
     /// 计算涨跌幅
+    /// 
+    /// 使用最早 K 线的开盘价和最晚 K 线的收盘价计算
     fn calc_price_change(candles: &[Candle]) -> f64 {
         if candles.len() < 2 {
             return 0.0;
         }
 
-        let first = &candles[0];
-        let last = &candles[candles.len() - 1];
+        // 按时间戳排序（从小到大）
+        let mut sorted: Vec<_> = candles.iter().collect();
+        sorted.sort_by_key(|c| c.ts);
+
+        let first = sorted[0];
+        let last = sorted[sorted.len() - 1];
 
         if first.open == 0.0 {
             return 0.0;
@@ -108,20 +124,73 @@ impl VolatilityIncreaseShortSellingStrategy {
     }
 
     /// 计算波动率
+    // fn calc_volatility_simple(candles: &[Candle]) -> f64 {
+    //     if candles.is_empty() {
+    //         return 0.0;
+    //     }
+
+    //     let avg_volatility: f64 = candles
+    //         .iter()
+    //         .map(|c| ((c.high - c.low) / c.open).abs())
+    //         .sum::<f64>()
+    //         / candles.len() as f64
+    //         * 100.0;
+
+    //     avg_volatility
+    // }
+
+    /// 计算真实波动率 (Realized Volatility)
+    ///
+    /// 使用对数收益率的标准差计算，符合学术和业界标准
+    /// 公式: RV = sqrt(Σ(r_t - r̄)² / (n-1))
+    /// 其中 r_t = ln(close_t / close_{t-1})
     fn calc_volatility(candles: &[Candle]) -> f64 {
-        if candles.is_empty() {
+        if candles.len() < 2 {
             return 0.0;
         }
 
-        let avg_volatility: f64 = candles
-            .iter()
-            .map(|c| ((c.high - c.low) / c.open).abs())
-            .sum::<f64>()
-            / candles.len() as f64
-            * 100.0;
+        // 计算对数收益率
+        let returns: Vec<f64> = candles
+            .windows(2)
+            .map(|w| {
+                let prev_close = w[0].close;
+                let curr_close = w[1].close;
+                if prev_close <= 0.0 {
+                    0.0
+                } else {
+                    (curr_close / prev_close).ln()
+                }
+            })
+            .collect();
 
-        avg_volatility
+        if returns.len() < 2 {
+            return 0.0;
+        }
+
+        // 计算平均收益率
+        let mean_return = returns.iter().sum::<f64>() / returns.len() as f64;
+
+        // 计算方差 (样本方差，分母 n-1)
+        let variance = returns
+            .iter()
+            .map(|r| (r - mean_return).powi(2))
+            .sum::<f64>()
+            / (returns.len() - 1) as f64;
+
+        // 标准差即为波动率，转为百分比
+        variance.sqrt() * 100.0
     }
+
+    /// 计算年化波动率
+    ///
+    /// 将小时级波动率年化，便于与其他时间框架比较
+    /// 年化因子: sqrt(24 * 365) ≈ 93.9 (对于1小时K线)
+    // fn calc_annualized_volatility(candles: &[Candle], bar_hours: f64) -> f64 {
+    //     let rv = Self::calc_volatility(candles);
+    //     // 年化公式: σ_annual = σ_period * sqrt(periods_per_year)
+    //     let periods_per_year = (24.0 * 365.0) / bar_hours;
+    //     rv * periods_per_year.sqrt()
+    // }
 
     // /// 分析市场数据
     // ///
@@ -271,6 +340,8 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
         let spot_tickers = market.fetch_tickers("SPOT").await?;
         let swap_tickers = market.fetch_tickers("SWAP").await?;
         
+        println!("[DEBUG] 获取到 {} 个现货交易对, {} 个永续合约", spot_tickers.len(), swap_tickers.len());
+        
         // 构建映射
         let spot_map: HashMap<String, String> = spot_tickers
             .into_iter()
@@ -296,22 +367,56 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
             })
             .collect();
         
-        // 遍历共同币种
-        for (coin, spot_id) in spot_map.iter().take(50) {
-            let Some(swap_id) = swap_map.get(coin) else {
-                continue;
-            };
+        println!("[DEBUG] 筛选后 - 现货USDT交易对: {}, 永续USDT合约: {}", spot_map.len(), swap_map.len());
+        
+        // 找出共同币种
+        let common_coins: Vec<_> = spot_map.keys()
+            .filter(|k| swap_map.contains_key(*k))
+            .cloned()
+            .collect();
+        println!("[DEBUG] 现货与永续同名币种数量: {}", common_coins.len());
+        
+        // 收集所有币种的数据用于排序展示
+        let mut coin_data: Vec<(String, f64, f64, usize, usize)> = Vec::new();
+        
+        // 遍历共同币种（先检查前30个币种，用于快速测试）
+        let check_count = std::cmp::min(30, common_coins.len());
+        println!("[DEBUG] 本次检查前 {} 个币种", check_count);
+        for coin in common_coins.iter().take(check_count) {
+            let spot_id = &spot_map[coin];
+            let swap_id = &swap_map[coin];
             
             // 获取 K 线数据
-            let spot_candles = match market.fetch_candles(spot_id, "1H", 8).await {
+            let spot_candles = match market.fetch_candles(spot_id, &self.config.bar, self.config.limit).await {
                 Ok(c) if c.len() >= self.config.min_candles => c,
-                _ => continue,
+                Ok(c) => {
+                    println!("[DEBUG] {} 现货K线数量不足: {} < {}", coin, c.len(), self.config.min_candles);
+                    continue;
+                }
+                Err(e) => {
+                    println!("[DEBUG] {} 获取现货K线失败: {:?}", coin, e);
+                    continue;
+                }
             };
             
-            let swap_candles = match market.fetch_candles(swap_id, "1H", 8).await {
+            let swap_candles = match market.fetch_candles(swap_id, &self.config.bar, self.config.limit).await {
                 Ok(c) if c.len() >= self.config.min_candles => c,
-                _ => continue,
+                Ok(c) => {
+                    println!("[DEBUG] {} 永续K线数量不足: {} < {}", coin, c.len(), self.config.min_candles);
+                    continue;
+                }
+                Err(e) => {
+                    println!("[DEBUG] {} 获取永续K线失败: {:?}", coin, e);
+                    continue;
+                }
             };
+            
+            // 计算涨跌幅
+            let spot_change = Self::calc_price_change(&spot_candles);
+            let swap_change = Self::calc_price_change(&swap_candles);
+            
+            // 记录数据用于排序展示
+            coin_data.push((coin.clone(), spot_change, swap_change, spot_candles.len(), swap_candles.len()));
             
             // 构建 MarketData
             let spot_data = MarketData {
@@ -319,7 +424,7 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
                 inst_id: spot_id.clone(),
                 ticker: None,
                 candles: spot_candles,
-                price_change_pct: 0.0,
+                price_change_pct: spot_change,
                 timestamp: Utc::now(),
             };
             
@@ -328,20 +433,43 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
                 inst_id: swap_id.clone(),
                 ticker: None,
                 candles: swap_candles,
-                price_change_pct: 0.0,
+                price_change_pct: swap_change,
                 timestamp: Utc::now(),
             };
             
             // 对比分析
             if let Some(comparison) = self.compare_spot_swap(&spot_data, &swap_data).await {
+                println!("[DEBUG] {} 分析结果: 现货涨幅={:.2}%, 永续涨幅={:.2}%, 平均波动率={:.2}%", 
+                    coin, comparison.spot_change, comparison.swap_change, comparison.avg_volatility);
+                
                 // 检查是否触发信号
                 if self.check_comparison_signal(&comparison) {
+                    println!("[DEBUG] {} 触发信号！", coin);
                     // 生成信号
                     let signal = self.create_signal(&comparison, &spot_data).await?;
                     signals.push(signal);
+                } else {
+                    println!("[DEBUG] {} 未触发信号 (阈值: 价格>{:.1}%, 波动率>{:.1}%)", 
+                        coin, self.config.price_change_threshold, self.config.volatility_threshold);
                 }
             }
         }
+        
+        // 按现货涨幅排序并打印前20个币种
+        coin_data.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        println!("\n[DEBUG] ===== 币种涨幅排行 (前20) =====");
+        println!("{:<10} {:>12} {:>12} {:>8} {:>8}", "币种", "现货涨幅%", "永续涨幅%", "现货K线", "永续K线");
+        println!("{}", "-".repeat(60));
+        for (i, (coin, spot_chg, swap_chg, spot_k, swap_k)) in coin_data.iter().take(20).enumerate() {
+            let marker = if *spot_chg > self.config.price_change_threshold && *swap_chg > self.config.price_change_threshold {
+                " <-- 符合条件"
+            } else {
+                ""
+            };
+            println!("{:<10} {:>12.2} {:>12.2} {:>8} {:>8}{}", 
+                coin, spot_chg, swap_chg, spot_k, swap_k, marker);
+        }
+        println!("[DEBUG] 共检查 {} 个币种, 生成 {} 个信号\n", common_coins.len(), signals.len());
         
         Ok(signals)
     }
