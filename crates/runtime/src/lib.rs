@@ -3,38 +3,38 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Runtime 状态
+/// Runtime state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeState {
-    /// 已初始化
+    /// Initialized
     Initialized,
-    /// 运行中
+    /// Running
     Running,
-    /// 已停止
+    /// Stopped
     Stopped,
 }
 
-/// 生命周期处理器 trait
+/// Lifecycle handler trait
 ///
-/// 实现此 trait 的模块可以注册到 Runtime，由 Runtime 统一管理其生命周期
+/// Modules implementing this trait can register to Runtime, which manages their lifecycle uniformly
 #[async_trait]
 pub trait LifecycleHandler: Send + Sync {
-    /// 启动时调用
+    /// Called on start
     async fn on_start(&self) -> Result<()>;
-    /// 停止时调用
+    /// Called on stop
     async fn on_stop(&self) -> Result<()>;
 }
 
-/// 生命周期管理器
+/// Lifecycle manager
 ///
-/// 负责管理所有已注册模块的生命周期，协调启动和停止流程
+/// Manages lifecycle of all registered modules, coordinates start and stop processes
 pub struct LifecycleManager {
     handlers: RwLock<Vec<Arc<dyn LifecycleHandler>>>,
     state: RwLock<RuntimeState>,
 }
 
 impl LifecycleManager {
-    /// 创建新的生命周期管理器
+    /// Create new lifecycle manager
     pub fn new() -> Self {
         Self {
             handlers: RwLock::new(Vec::new()),
@@ -42,18 +42,18 @@ impl LifecycleManager {
         }
     }
 
-    /// 注册生命周期处理器
+    /// Register lifecycle handler
     ///
     /// # Arguments
-    /// * `handler` - 实现了 LifecycleHandler trait 的模块
+    /// * `handler` - Module implementing LifecycleHandler trait
     pub async fn register(&self, handler: Arc<dyn LifecycleHandler>) {
         let mut handlers = self.handlers.write().await;
         handlers.push(handler);
     }
 
-    /// 启动所有已注册的模块
+    /// Start all registered modules
     ///
-    /// 按注册顺序依次调用每个模块的 on_start 方法
+    /// Call each module's on_start method in registration order
     pub async fn start_all(&self) -> Result<()> {
         let handlers = self.handlers.read().await;
         for handler in handlers.iter() {
@@ -64,12 +64,12 @@ impl LifecycleManager {
         Ok(())
     }
 
-    /// 停止所有已注册的模块
+    /// Stop all registered modules
     ///
-    /// 按注册逆序依次调用每个模块的 on_stop 方法
+    /// Call each module's on_stop method in reverse registration order
     pub async fn stop_all(&self) -> Result<()> {
         let handlers = self.handlers.read().await;
-        // 逆序停止，确保依赖关系正确处理
+        // Stop in reverse order to ensure dependency relationships are handled correctly
         for handler in handlers.iter().rev() {
             handler.on_stop().await?;
         }
@@ -78,7 +78,7 @@ impl LifecycleManager {
         Ok(())
     }
 
-    /// 获取当前 Runtime 状态
+    /// Get current Runtime state
     pub async fn state(&self) -> RuntimeState {
         *self.state.read().await
     }
@@ -90,26 +90,26 @@ impl Default for LifecycleManager {
     }
 }
 
-/// 最小化运行时
+/// Minimal runtime
 ///
-/// 提供基础的生命周期管理功能，采用被动服务模式
-/// Runtime 不主动创建上层模块，被动接收注册
+/// Provides basic lifecycle management functionality, adopts passive service mode
+/// Runtime does not actively create upper-level modules, passively receives registration
 pub struct Runtime {
     lifecycle: LifecycleManager,
 }
 
 impl Runtime {
-    /// 创建新的 Runtime 实例
+    /// Create new Runtime instance
     pub fn new() -> Self {
         Self {
             lifecycle: LifecycleManager::new(),
         }
     }
 
-    /// 注册生命周期处理器
+    /// Register lifecycle handler
     ///
     /// # Arguments
-    /// * `handler` - 实现了 LifecycleHandler trait 的模块
+    /// * `handler` - Module implementing LifecycleHandler trait
     ///
     /// # Example
     /// ```rust
@@ -141,21 +141,21 @@ impl Runtime {
         self.lifecycle.register(handler).await;
     }
 
-    /// 启动 Runtime
+    /// Start Runtime
     ///
-    /// 触发所有已注册模块的 on_start 回调
+    /// Trigger on_start callbacks for all registered modules
     pub async fn start(&self) -> Result<()> {
         self.lifecycle.start_all().await
     }
 
-    /// 停止 Runtime
+    /// Stop Runtime
     ///
-    /// 触发所有已注册模块的 on_stop 回调
+    /// Trigger on_stop callbacks for all registered modules
     pub async fn stop(&self) -> Result<()> {
         self.lifecycle.stop_all().await
     }
 
-    /// 获取当前 Runtime 状态
+    /// Get current Runtime state
     pub async fn state(&self) -> RuntimeState {
         self.lifecycle.state().await
     }
@@ -217,18 +217,18 @@ mod tests {
         let runtime = Runtime::new();
         let module = Arc::new(TestModule::new("TestModule"));
 
-        // 初始状态为 Initialized
+        // Initial state is Initialized
         assert_eq!(runtime.state().await, RuntimeState::Initialized);
 
-        // 注册模块
+        // Register module
         runtime.register(module.clone()).await;
 
-        // 启动 Runtime
+        // Start Runtime
         runtime.start().await.unwrap();
         assert!(module.is_started().await);
         assert_eq!(runtime.state().await, RuntimeState::Running);
 
-        // 停止 Runtime
+        // Stop Runtime
         runtime.stop().await.unwrap();
         assert!(module.is_stopped().await);
         assert_eq!(runtime.state().await, RuntimeState::Stopped);

@@ -8,131 +8,125 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration};
 
-// ==================== Agent 任务类型（供 Agent 层使用）====================
+// ==================== Agent Task Types (for Agent layer) ====================
 
-/// Agent 任务类型
+/// Agent task types
 /// 
-/// 定义了 Engine 可以异步触发给 Agent 层的任务类型
+/// Defines task types that Engine can asynchronously trigger to the Agent layer
 #[derive(Debug, Clone)]
 pub enum AgentTask {
-    /// 策略发现 - 分析市场数据发现交易机会
+    /// Strategy discovery - analyze market data to find trading opportunities
     DiscoverStrategy(MarketData),
-    /// 信号分析 - 分析特定交易信号
+    /// Signal analysis - analyze specific trading signals
     AnalyzeSignal(Signal),
-    /// 模式识别 - 识别历史模式
+    /// Pattern recognition - identify historical patterns
     RecognizePattern(Vec<MarketData>),
 }
 
-/// Agent 任务处理器 trait
+/// Agent task handler trait
 /// 
-/// 由 Agent 层实现，Engine 通过此 trait 异步触发任务
+/// Implemented by Agent layer, Engine triggers tasks asynchronously through this trait
 #[async_trait]
 pub trait AgentTaskHandler: Send + Sync {
-    /// 异步处理任务（不返回结果）
+    /// Process task asynchronously (no return result)
     async fn handle_task(&self, task: AgentTask);
 }
 
-// ==================== Trait 定义 ====================
+// ==================== Trait Definitions ====================
 
-/// 策略 trait - 定义策略的通用接口
+/// Strategy trait - defines common interface for strategies
 ///
-/// 所有具体策略需要实现此 trait，被 Engine 调用
+/// All concrete strategies need to implement this trait to be called by Engine
+/// 
+/// Option B: Strategy fetches market data autonomously
 #[async_trait]
 pub trait Strategy: Send + Sync {
-    /// 获取策略名称
+    /// Get strategy name
     fn name(&self) -> &str;
 
-    /// 检查策略条件
+    /// Execute strategy
+    ///
+    /// Strategy fetches market data autonomously, analyzes and returns signal list
     ///
     /// # Arguments
-    /// * `data` - 市场数据
+    /// * `market` - Market interface, strategy can fetch data through it
     ///
     /// # Returns
-    /// * `Ok(true)` - 条件满足，应生成信号
-    /// * `Ok(false)` - 条件不满足
-    async fn check_conditions(&self, data: &MarketData) -> Result<bool>;
-
-    /// 生成交易信号
-    ///
-    /// # Arguments
-    /// * `data` - 市场数据
-    ///
-    /// # Returns
-    /// * `Ok(Signal)` - 交易信号
-    async fn generate_signal(&self, data: &MarketData) -> Result<Signal>;
+    /// * `Ok(Vec<Signal>)` - Trading signal list (may be empty)
+    async fn execute(&self, market: &dyn Market) -> Result<Vec<Signal>>;
 }
 
-/// 市场 trait - 定义市场数据获取接口
+/// Market trait - defines market data fetch interface
 ///
-/// OKX、Binance 等交易所实现此 trait
+/// Exchanges like OKX, Binance implement this trait
 #[async_trait]
 pub trait Market: Send + Sync {
-    /// 获取市场名称
+    /// Get market name
     fn name(&self) -> &str;
 
-    /// 获取所有交易对行情
+    /// Fetch all trading pair tickers
     async fn fetch_tickers(&self, inst_type: &str) -> Result<Vec<Ticker>>;
 
-    /// 获取 K 线数据
+    /// Fetch candlestick data
     ///
     /// # Arguments
-    /// * `inst_id` - 交易对 ID，如 "BTC-USDT"
-    /// * `bar` - 时间周期，如 "1H"
-    /// * `limit` - 返回条数
+    /// * `inst_id` - Trading pair ID, e.g. "BTC-USDT"
+    /// * `bar` - Time period, e.g. "1H"
+    /// * `limit` - Number of records to return
     async fn fetch_candles(&self, inst_id: &str, bar: &str, limit: u32) -> Result<Vec<Candle>>;
 }
 
-/// 通知渠道 trait - 定义通知发送接口
+/// Notification channel trait - defines notification send interface
 ///
-/// Lark、Email 等渠道实现此 trait
+/// Channels like Lark, Email implement this trait
 #[async_trait]
 pub trait Channel: Send + Sync {
-    /// 获取渠道名称
+    /// Get channel name
     fn name(&self) -> &str;
 
-    /// 发送通知
+    /// Send notification
     ///
     /// # Arguments
-    /// * `message` - 通知内容
+    /// * `message` - Notification content
     async fn send(&self, message: &str) -> Result<()>;
 }
 
-// ==================== 数据类型定义 ====================
+// ==================== Data Type Definitions ====================
 
-/// 交易对行情
+/// Trading pair ticker
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Ticker {
-    /// 交易对 ID，如 "BTC-USDT"
+    /// Trading pair ID, e.g. "BTC-USDT"
     #[serde(rename = "instId")]
     pub inst_id: String,
-    /// 最新价格
+    /// Latest price
     #[serde(rename = "last")]
     pub last_price: String,
-    /// 24小时涨跌幅
+    /// 24-hour price change
     #[serde(rename = "open24h")]
     pub open_24h: String,
 }
 
-/// K 线数据
+/// Candlestick data
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Candle {
-    /// 开盘时间戳 (ms)
+    /// Opening timestamp (ms)
     pub ts: i64,
-    /// 开盘价
+    /// Opening price
     pub open: f64,
-    /// 最高价
+    /// Highest price
     pub high: f64,
-    /// 最低价
+    /// Lowest price
     pub low: f64,
-    /// 收盘价
+    /// Closing price
     pub close: f64,
-    /// 成交量
+    /// Trading volume
     pub vol: f64,
 }
 
 impl Candle {
-    /// 从 OKX API 响应解析
-    /// OKX 返回格式: [ts, open, high, low, close, vol, volCcy]
+    /// Parse from OKX API response
+    /// OKX returns format: [ts, open, high, low, close, vol, volCcy]
     pub fn from_okx(data: &[String]) -> Result<Self> {
         if data.len() < 6 {
             return Err(anyhow::anyhow!("Invalid candle data length"));
@@ -148,81 +142,83 @@ impl Candle {
     }
 }
 
-/// 市场数据
+/// Market data
 #[derive(Debug, Clone)]
 pub struct MarketData {
-    /// 数据来源市场
+    /// Data source market
     pub source: String,
-    /// 交易对
+    /// Trading pair
     pub inst_id: String,
-    /// 当前行情
+    /// Current ticker
     pub ticker: Option<Ticker>,
-    /// K 线数据
+    /// Candlestick data
     pub candles: Vec<Candle>,
-    /// 计算出的涨跌幅 (%)
+    /// Calculated price change (%)
     pub price_change_pct: f64,
-    /// 数据时间
+    /// Data timestamp
     pub timestamp: DateTime<Utc>,
 }
 
-/// 交易信号类型
+/// Trading signal type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SignalType {
-    /// 买入信号
+    /// Buy signal
     Buy,
-    /// 卖出信号
+    /// Sell signal
     Sell,
-    /// 观望/提醒
+    /// Alert/Watch
     Alert,
 }
 
-/// 交易信号
+/// Trading signal
 #[derive(Debug, Clone, Serialize)]
 pub struct Signal {
-    /// 信号 ID
+    /// Signal ID
     pub id: String,
-    /// 策略名称
+    /// Strategy name
     pub strategy_name: String,
-    /// 信号类型
+    /// Signal type
     pub signal_type: SignalType,
-    /// 交易对
+    /// Trading pair
     pub inst_id: String,
-    /// 信号描述
+    /// Signal description
     pub description: String,
-    /// 相关数据（JSON 格式）
+    /// Related data (JSON format)
     pub data: serde_json::Value,
-    /// 生成时间
+    /// Creation time
     pub created_at: DateTime<Utc>,
-    /// 是否需要 AI 分析
+    /// Whether AI analysis is needed
     pub needs_analysis: bool,
 }
 
-/// 调度任务类型
+/// Scheduled task type
 #[derive(Debug, Clone)]
 pub enum TaskType {
-    /// 检查策略条件
+    /// Check strategy conditions
     CheckConditions,
-    /// 获取市场数据
+    /// Fetch market data
     FetchMarketData,
-    /// 自定义任务
+    /// Custom task
     Custom(String),
 }
 
-/// 调度任务
+/// Scheduled task
 pub struct ScheduledTask {
-    /// 任务类型
+    /// Task type
     pub task_type: TaskType,
-    /// 执行间隔
+    /// Execution interval
     pub interval: Duration,
-    /// 任务函数
+    /// Task handler function
     pub handler: Box<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>> + Send + Sync>,
 }
 
-// ==================== 组件实现 ====================
+// ==================== Component Implementations ====================
 
-/// 策略执行器
+/// Strategy executor
 ///
-/// 负责管理策略列表，执行条件检查和信号生成
+/// Manages strategy list, executes strategies to fetch data and generate signals
+/// 
+/// Option B: Strategy fetches market data autonomously
 pub struct Executor {
     strategies: RwLock<Vec<Arc<dyn Strategy>>>,
 }
@@ -234,38 +230,34 @@ impl Executor {
         }
     }
 
-    /// 加载策略
+    /// Load strategy
     pub async fn load_strategy(&self, strategy: Arc<dyn Strategy>) {
         let mut strategies = self.strategies.write().await;
         strategies.push(strategy);
     }
 
-    /// 执行所有策略的条件检查
-    pub async fn execute(&self, data: &MarketData) -> Result<Vec<Signal>> {
+    /// Execute all strategies
+    ///
+    /// Each strategy fetches market data autonomously and returns signals
+    pub async fn execute(&self, market: &dyn Market) -> Result<Vec<Signal>> {
         let strategies = self.strategies.read().await;
-        let mut signals = Vec::new();
+        let mut all_signals = Vec::new();
 
         for strategy in strategies.iter() {
-            match strategy.check_conditions(data).await {
-                Ok(true) => {
-                    match strategy.generate_signal(data).await {
-                        Ok(signal) => signals.push(signal),
-                        Err(e) => {
-                            eprintln!("Strategy {} failed to generate signal: {}", strategy.name(), e);
-                        }
-                    }
+            match strategy.execute(market).await {
+                Ok(signals) => {
+                    all_signals.extend(signals);
                 }
-                Ok(false) => {}
                 Err(e) => {
-                    eprintln!("Strategy {} check_conditions failed: {}", strategy.name(), e);
+                    eprintln!("Strategy {} execute failed: {}", strategy.name(), e);
                 }
             }
         }
 
-        Ok(signals)
+        Ok(all_signals)
     }
 
-    /// 获取已加载的策略数量
+    /// Get number of loaded strategies
     pub async fn strategy_count(&self) -> usize {
         self.strategies.read().await.len()
     }
@@ -277,9 +269,9 @@ impl Default for Executor {
     }
 }
 
-/// 任务调度器
+/// Task scheduler
 ///
-/// 负责定时任务的调度和执行
+/// Responsible for scheduling and executing timed tasks
 pub struct Scheduler {
     tasks: RwLock<Vec<(TaskType, Duration, mpsc::Sender<()>)>>,
 }
@@ -291,12 +283,12 @@ impl Scheduler {
         }
     }
 
-    /// 调度周期性任务
+    /// Schedule periodic task
     ///
     /// # Arguments
-    /// * `task_type` - 任务类型
-    /// * `interval` - 执行间隔
-    /// * `handler` - 任务处理函数
+    /// * `task_type` - Task type
+    /// * `interval` - Execution interval
+    /// * `handler` - Task handler function
     pub async fn schedule_repeating<F, Fut>(
         &self,
         task_type: TaskType,
@@ -312,7 +304,7 @@ impl Scheduler {
         tasks.push((task_type, interval_duration, tx));
         drop(tasks);
 
-        // 启动任务循环
+        // Start task loop
         tokio::spawn(async move {
             let mut ticker = interval(interval_duration);
 
@@ -324,7 +316,7 @@ impl Scheduler {
                         }
                     }
                     _ = rx.recv() => {
-                        // 收到停止信号
+                        // Received stop signal
                         break;
                     }
                 }
@@ -334,7 +326,7 @@ impl Scheduler {
         Ok(())
     }
 
-    /// 停止所有调度任务
+    /// Stop all scheduled tasks
     pub async fn stop_all(&self) {
         let tasks = self.tasks.read().await;
         for (_, _, tx) in tasks.iter() {
@@ -349,9 +341,9 @@ impl Default for Scheduler {
     }
 }
 
-/// 市场监控器
+/// Market monitor
 ///
-/// 负责监控市场数据变化，检测异常
+/// Monitors market data changes and detects anomalies
 pub struct Monitor {
     markets: RwLock<Vec<Arc<dyn Market>>>,
     data_cache: RwLock<HashMap<String, MarketData>>,
@@ -365,13 +357,13 @@ impl Monitor {
         }
     }
 
-    /// 添加市场
+    /// Add market
     pub async fn add_market(&self, market: Arc<dyn Market>) {
         let mut markets = self.markets.write().await;
         markets.push(market);
     }
 
-    /// 获取所有市场的行情数据
+    /// Fetch all market tickers
     pub async fn fetch_all_tickers(&self, inst_type: &str) -> Result<HashMap<String, Vec<Ticker>>> {
         let markets = self.markets.read().await;
         let mut result = HashMap::new();
@@ -390,7 +382,7 @@ impl Monitor {
         Ok(result)
     }
 
-    /// 获取指定交易对的 K 线数据并计算涨跌幅
+    /// Fetch candlestick data for specified trading pair and calculate price change
     pub async fn fetch_candles_with_change(
         &self,
         market_name: &str,
@@ -410,7 +402,7 @@ impl Monitor {
             return Ok(None);
         }
 
-        // 计算涨跌幅
+        // Calculate price change
         let price_change_pct = Self::calc_price_change(&candles);
 
         let data = MarketData {
@@ -422,14 +414,14 @@ impl Monitor {
             timestamp: Utc::now(),
         };
 
-        // 缓存数据
+        // Cache data
         let mut cache = self.data_cache.write().await;
         cache.insert(format!("{}:{}", market_name, inst_id), data.clone());
 
         Ok(Some(data))
     }
 
-    /// 计算价格涨跌幅 (%)
+    /// Calculate price change (%)
     fn calc_price_change(candles: &[Candle]) -> f64 {
         if candles.len() < 2 {
             return 0.0;
@@ -442,7 +434,7 @@ impl Monitor {
         (last.close - first.open) / first.open * 100.0
     }
 
-    /// 检测超过阈值的变化
+    /// Detect changes exceeding threshold
     pub async fn detect_threshold_crossing(
         &self,
         threshold_pct: f64,
@@ -463,33 +455,33 @@ impl Default for Monitor {
     }
 }
 
-// ==================== Engine 核心 ====================
+// ==================== Engine Core ====================
 
-/// Engine 内部状态
+/// Engine internal state
 struct EngineInner {
-    /// 策略执行器
+    /// Strategy executor
     executor: Executor,
-    /// 任务调度器
+    /// Task scheduler
     scheduler: Scheduler,
-    /// 市场监控器
+    /// Market monitor
     monitor: Monitor,
-    /// 通知渠道
+    /// Notification channels
     channels: RwLock<Vec<Arc<dyn Channel>>>,
-    /// Agent 任务处理器
+    /// Agent task handler
     agent_handler: RwLock<Option<Arc<dyn AgentTaskHandler>>>,
-    /// 当前状态
+    /// Current state
     state: RwLock<RuntimeState>,
 }
 
-/// Engine - 业务逻辑层核心
+/// Engine - Business logic layer core
 ///
-/// 负责策略执行、市场监控、信号生成和通知发送
+/// Responsible for strategy execution, market monitoring, signal generation and notification sending
 pub struct Engine {
     inner: RwLock<EngineInner>,
 }
 
 impl Engine {
-    /// 创建新的 Engine 实例
+    /// Create new Engine instance
     pub fn new() -> Self {
         Self {
             inner: RwLock::new(EngineInner {
@@ -503,21 +495,21 @@ impl Engine {
         }
     }
 
-    /// 加载策略
+    /// Load strategy
     pub async fn load_strategy(&self, strategy: Arc<dyn Strategy>) -> Result<()> {
         let inner = self.inner.read().await;
         inner.executor.load_strategy(strategy).await;
         Ok(())
     }
 
-    /// 添加市场
+    /// Add market
     pub async fn add_market(&self, market: Arc<dyn Market>) -> Result<()> {
         let inner = self.inner.read().await;
         inner.monitor.add_market(market).await;
         Ok(())
     }
 
-    /// 添加通知渠道
+    /// Add notification channel
     pub async fn add_channel(&self, channel: Arc<dyn Channel>) -> Result<()> {
         let inner = self.inner.read().await;
         let mut channels = inner.channels.write().await;
@@ -525,7 +517,7 @@ impl Engine {
         Ok(())
     }
 
-    /// 调度周期性任务
+    /// Schedule periodic task
     pub async fn schedule_repeating<F, Fut>(
         &self,
         task_type: TaskType,
@@ -540,13 +532,15 @@ impl Engine {
         inner.scheduler.schedule_repeating(task_type, interval, handler).await
     }
 
-    /// 检查所有策略条件
-    pub async fn check_conditions(&self, data: &MarketData) -> Result<Vec<Signal>> {
+    /// Execute all strategies
+    ///
+    /// Strategy fetches market data autonomously and generates signals
+    pub async fn execute_strategies(&self, market: &dyn Market) -> Result<Vec<Signal>> {
         let inner = self.inner.read().await;
-        inner.executor.execute(data).await
+        inner.executor.execute(market).await
     }
 
-    /// 发送通知到所有渠道
+    /// Send notification to all channels
     pub async fn send_notification(&self, signal: &Signal) -> Result<()> {
         let inner = self.inner.read().await;
         let channels = inner.channels.read().await;
@@ -561,50 +555,50 @@ impl Engine {
         Ok(())
     }
 
-    /// 获取市场监控器引用
+    /// Get market monitor reference
     pub async fn monitor(&self) -> Result<tokio::sync::RwLockReadGuard<'_, Monitor>> {
         let inner = self.inner.read().await;
-        // 由于 RwLockReadGuard 的生命周期问题，这里返回 Monitor 的引用方式需要调整
-        // 实际使用时直接通过 Engine 方法暴露 Monitor 功能
+        // Due to RwLockReadGuard lifetime issues, the way to return Monitor reference needs adjustment
+        // In actual use, expose Monitor functionality directly through Engine methods
         Ok(tokio::sync::RwLockReadGuard::map(inner, |i| &i.monitor))
     }
 
-    /// 获取调度器引用
+    /// Get scheduler reference
     pub fn scheduler(&self) -> &Scheduler {
-        // 由于内部可变性设计，这里简化处理
-        // 实际使用时通过 Engine 方法间接调用
+        // Simplified due to interior mutability design
+        // In actual use, call indirectly through Engine methods
         unimplemented!("Use schedule_repeating method instead")
     }
 
-    /// 获取当前状态
+    /// Get current state
     pub async fn state(&self) -> RuntimeState {
         let inner = self.inner.read().await;
         *inner.state.read().await
     }
 
-    /// 设置 Agent 任务处理器
+    /// Set Agent task handler
     ///
     /// # Arguments
-    /// * `handler` - Agent 任务处理器
+    /// * `handler` - Agent task handler
     pub async fn set_agent_handler(&self, handler: Arc<dyn AgentTaskHandler>) {
         let inner = self.inner.read().await;
         let mut agent_handler = inner.agent_handler.write().await;
         *agent_handler = Some(handler);
     }
 
-    /// 异步触发 Agent 任务（不等待结果）
+    /// Asynchronously trigger Agent task (no wait for result)
     ///
-    /// 根据设计文档，Engine 通过 spawn 异步触发 Agent 任务，立即返回
+    /// According to design doc, Engine triggers Agent tasks asynchronously via spawn, returns immediately
     ///
     /// # Arguments
-    /// * `task` - Agent 任务
+    /// * `task` - Agent task
     pub async fn spawn_agent_task(&self, task: AgentTask) {
         let inner = self.inner.read().await;
         let handler = inner.agent_handler.read().await.clone();
         
         match handler {
             Some(h) => {
-                // 异步 spawn，不等待结果
+                // Async spawn, no wait for result
                 tokio::spawn(async move {
                     h.handle_task(task).await;
                 });
@@ -642,7 +636,7 @@ impl Default for Engine {
     }
 }
 
-// ==================== 测试 ====================
+// ==================== Tests ====================
 
 #[cfg(test)]
 mod tests {
@@ -656,21 +650,26 @@ mod tests {
             "TestStrategy"
         }
 
-        async fn check_conditions(&self, _data: &MarketData) -> Result<bool> {
-            Ok(true)
-        }
-
-        async fn generate_signal(&self, data: &MarketData) -> Result<Signal> {
-            Ok(Signal {
+        async fn execute(&self, market: &dyn Market) -> Result<Vec<Signal>> {
+            // Test strategy: fetch data autonomously and generate signals
+            let candles = market.fetch_candles("TEST-USDT", "1H", 8).await?;
+            
+            if candles.is_empty() {
+                return Ok(vec![]);
+            }
+            
+            let signal = Signal {
                 id: "test-1".to_string(),
                 strategy_name: self.name().to_string(),
                 signal_type: SignalType::Buy,
-                inst_id: data.inst_id.clone(),
+                inst_id: "TEST-USDT".to_string(),
                 description: "Test signal".to_string(),
-                data: serde_json::json!({}),
+                data: serde_json::json!({"candles_count": candles.len()}),
                 created_at: Utc::now(),
                 needs_analysis: false,
-            })
+            };
+            
+            Ok(vec![signal])
         }
     }
 
@@ -709,21 +708,21 @@ mod tests {
     async fn test_engine_lifecycle() {
         let engine = Arc::new(Engine::new());
 
-        // 初始状态
+        // Initial state
         assert_eq!(engine.state().await, RuntimeState::Initialized);
 
-        // 加载策略
+        // Load strategy
         engine.load_strategy(Arc::new(TestStrategy)).await.unwrap();
 
-        // 添加市场和渠道
+        // Add market and channel
         engine.add_market(Arc::new(TestMarket)).await.unwrap();
         engine.add_channel(Arc::new(TestChannel)).await.unwrap();
 
-        // 启动
+        // Start
         engine.on_start().await.unwrap();
         assert_eq!(engine.state().await, RuntimeState::Running);
 
-        // 停止
+        // Stop
         engine.on_stop().await.unwrap();
         assert_eq!(engine.state().await, RuntimeState::Stopped);
     }
@@ -734,18 +733,10 @@ mod tests {
         executor.load_strategy(Arc::new(TestStrategy)).await;
         assert_eq!(executor.strategy_count().await, 1);
 
-        let data = MarketData {
-            source: "test".to_string(),
-            inst_id: "BTC-USDT".to_string(),
-            ticker: None,
-            candles: vec![],
-            price_change_pct: 10.0,
-            timestamp: Utc::now(),
-        };
-
-        let signals = executor.execute(&data).await.unwrap();
-        assert_eq!(signals.len(), 1);
-        assert_eq!(signals[0].signal_type, SignalType::Buy);
+        let market = TestMarket;
+        let signals = executor.execute(&market).await.unwrap();
+        // TestMarket returns empty candles, so strategy returns empty signal list
+        assert_eq!(signals.len(), 0);
     }
 
     #[tokio::test]

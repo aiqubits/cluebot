@@ -1,5 +1,4 @@
 [workspace.package]
-name = "cluebot"
 version = "0.0.1"
 edition = "2024"
 description = "Quantitative clue bot."
@@ -9,14 +8,34 @@ repository = "https://github.com/cluebot/cluebot"
 exclude = [".github/"]
 
 [workspace]
+resolver = "3"
 members = [
     "bin/cluebot", "crates/agent/discovery-strategy", "crates/agent/strategy-creation", "crates/agent/strategy-optimization", "crates/engine", "crates/extensions/markets/binance", "crates/extensions/channels/email", "crates/extensions/channels/lark", "crates/extensions/markets/okx", "crates/llm-gateway", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
 default-members = ["bin/cluebot"]
 
 [workspace.dependencies]
-# cluebot
+# cluebot internal crates
 cluebot = { path = "bin/cluebot" }
 cluebot-runtime = { path = "crates/runtime" }
 cluebot-engine = { path = "crates/engine" }
-cluebot-email = { path = "crates/extensions/email" }
-cluebot-lark = { path = "crates/extensions/lark" }
+cluebot-email = { path = "crates/extensions/channels/email" }
+cluebot-lark = { path = "crates/extensions/channels/lark" }
+cluebot-binance = { path = "crates/extensions/markets/binance" }
+cluebot-okx = { path = "crates/extensions/markets/okx" }
+cluebot-llm-gateway = { path = "crates/llm-gateway" }
+discovery-strategy = { path = "crates/agent/discovery-strategy" }
+strategy-creation = { path = "crates/agent/strategy-creation" }
+strategy-optimization = { path = "crates/agent/strategy-optimization" }
+volatility-increase-short-selling = { path = "crates/strategies/volatility-increase-short-selling" }
+
+# external dependencies
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json"] }
+uuid = { version = "1.0", features = ["v4"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1", "builder", "smtp-transport", "tokio1-native-tls"] }
+dotenvy = "0.15"

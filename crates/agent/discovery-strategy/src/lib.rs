@@ -3,26 +3,26 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use cluebot_engine::{Channel, MarketData, Signal};
 use cluebot_llm_gateway::{LLMGateway, Message};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-// ==================== 核心类型定义 ====================
+// ==================== Core Type Definitions ====================
 
-/// Agent 任务类型
+/// Agent task types
 #[derive(Debug, Clone)]
 pub enum AgentTask {
-    /// 策略发现 - 分析市场数据发现交易机会
+    /// Strategy discovery - analyze market data to find trading opportunities
     DiscoverStrategy(MarketData),
-    /// 信号分析 - 分析特定交易信号
+    /// Signal analysis - analyze specific trading signals
     AnalyzeSignal(Signal),
-    /// 模式识别 - 识别历史模式
+    /// Pattern recognition - identify historical patterns
     RecognizePattern(Vec<MarketData>),
 }
 
-/// 任务类型枚举（用于报告）
+/// Task type enum (for reports)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum AgentTaskType {
     DiscoverStrategy,
@@ -30,53 +30,53 @@ pub enum AgentTaskType {
     RecognizePattern,
 }
 
-/// 发现的交易机会
+/// Discovered trading opportunity
 #[derive(Debug, Clone, Serialize)]
 pub struct Finding {
-    /// 机会类型
+    /// Opportunity type
     pub opportunity_type: String,
-    /// 置信度 (0.0 - 1.0)
+    /// Confidence level (0.0 - 1.0)
     pub confidence: f64,
-    /// 描述
+    /// Description
     pub description: String,
-    /// 支持数据
+    /// Supporting data
     pub supporting_data: serde_json::Value,
 }
 
-/// 建议操作
+/// Recommended action
 #[derive(Debug, Clone, Serialize)]
 pub struct Recommendation {
-    /// 建议类型
+    /// Action type
     pub action_type: String,
-    /// 优先级 (high/medium/low)
+    /// Priority (high/medium/low)
     pub priority: String,
-    /// 建议描述
+    /// Description
     pub description: String,
-    /// 预期效果
+    /// Expected outcome
     pub expected_outcome: String,
 }
 
-/// 分析结果报告
+/// Analysis result report
 #[derive(Debug, Clone, Serialize)]
 pub struct AnalysisReport {
-    /// 报告 ID
+    /// Report ID
     pub report_id: String,
-    /// 任务类型
+    /// Task type
     pub task_type: AgentTaskType,
-    /// 摘要
+    /// Summary
     pub summary: String,
-    /// 发现的机会
+    /// Discovered opportunities
     pub findings: Vec<Finding>,
-    /// 建议
+    /// Recommendations
     pub recommendations: Vec<Recommendation>,
-    /// 风险等级
+    /// Risk level
     pub risk_level: String,
-    /// 生成时间
+    /// Generation time
     pub timestamp: DateTime<Utc>,
 }
 
 impl AnalysisReport {
-    /// 创建新报告
+    /// Create new report
     pub fn new(task_type: AgentTaskType) -> Self {
         Self {
             report_id: Uuid::new_v4().to_string(),
@@ -89,25 +89,25 @@ impl AnalysisReport {
         }
     }
 
-    /// 添加发现
+    /// Add finding
     pub fn add_finding(mut self, finding: Finding) -> Self {
         self.findings.push(finding);
         self
     }
 
-    /// 添加建议
+    /// Add recommendation
     pub fn add_recommendation(mut self, rec: Recommendation) -> Self {
         self.recommendations.push(rec);
         self
     }
 
-    /// 设置摘要
+    /// Set summary
     pub fn with_summary(mut self, summary: impl Into<String>) -> Self {
         self.summary = summary.into();
         self
     }
 
-    /// 设置风险等级
+    /// Set risk level
     pub fn with_risk_level(mut self, level: impl Into<String>) -> Self {
         self.risk_level = level.into();
         self
@@ -116,91 +116,91 @@ impl AnalysisReport {
 
 // ==================== Agent Trait ====================
 
-/// Agent trait - 所有 Agent 实现此接口
+/// Agent trait - all Agents implement this interface
 #[async_trait]
 pub trait Agent: Send + Sync {
-    /// 获取 Agent 名称
+    /// Get Agent name
     fn name(&self) -> &str;
 
-    /// 执行分析任务
+    /// Execute analysis task
     ///
     /// # Arguments
-    /// * `task` - Agent 任务
+    /// * `task` - Agent task
     ///
     /// # Returns
-    /// * `Ok(AnalysisReport)` - 分析结果报告
+    /// * `Ok(AnalysisReport)` - Analysis result report
     async fn execute(&self, task: AgentTask) -> Result<AnalysisReport>;
 
-    /// 生成并发送报告
+    /// Generate and send report
     ///
     /// # Arguments
-    /// * `report` - 分析报告
+    /// * `report` - Analysis report
     async fn send_report(&self, report: &AnalysisReport) -> Result<()>;
 }
 
-// ==================== 市场数据分析器 ====================
+// ==================== Market Data Analyzer ====================
 
-/// 市场数据分析器
+/// Market data analyzer
 ///
-/// 负责分析原始市场数据，提取关键指标
+/// Responsible for analyzing raw market data and extracting key indicators
 pub struct Analyzer;
 
 impl Analyzer {
-    /// 分析市场数据
+    /// Analyze market data
     ///
     /// # Arguments
-    /// * `data` - 市场数据
+    /// * `data` - Market data
     ///
     /// # Returns
-    /// * 分析结果摘要
+    /// * Analysis result summary
     pub fn analyze_market_data(data: &MarketData) -> String {
         let mut analysis = String::new();
 
-        analysis.push_str(&format!("交易对: {}\n", data.inst_id));
-        analysis.push_str(&format!("数据来源: {}\n", data.source));
-        analysis.push_str(&format!("涨跌幅: {:.2}%\n", data.price_change_pct));
-        analysis.push_str(&format!("K线数量: {}\n", data.candles.len()));
+        analysis.push_str(&format!("Trading Pair: {}\n", data.inst_id));
+        analysis.push_str(&format!("Data Source: {}\n", data.source));
+        analysis.push_str(&format!("Price Change: {:.2}%\n", data.price_change_pct));
+        analysis.push_str(&format!("Candle Count: {}\n", data.candles.len()));
 
         if !data.candles.is_empty() {
             let first = &data.candles[0];
             let last = &data.candles[data.candles.len() - 1];
-            analysis.push_str(&format!("开盘价: {:.2}\n", first.open));
-            analysis.push_str(&format!("最新价: {:.2}\n", last.close));
-            analysis.push_str(&format!("最高价: {:.2}\n", 
+            analysis.push_str(&format!("Open Price: {:.2}\n", first.open));
+            analysis.push_str(&format!("Latest Price: {:.2}\n", last.close));
+            analysis.push_str(&format!("Highest Price: {:.2}\n", 
                 data.candles.iter().map(|c| c.high).fold(0.0f64, f64::max)));
-            analysis.push_str(&format!("最低价: {:.2}\n",
+            analysis.push_str(&format!("Lowest Price: {:.2}\n",
                 data.candles.iter().map(|c| c.low).fold(f64::MAX, f64::min)));
         }
 
         analysis
     }
 
-    /// 分析多个市场数据
+    /// Analyze multiple market data
     pub fn analyze_multiple_data(data_list: &[MarketData]) -> String {
         let mut analysis = String::new();
-        analysis.push_str(&format!("分析 {} 个交易对\n\n", data_list.len()));
+        analysis.push_str(&format!("Analyzing {} trading pairs\n\n", data_list.len()));
 
         for data in data_list.iter().take(5) {
             analysis.push_str(&format!("- {}: {:.2}%\n", data.inst_id, data.price_change_pct));
         }
 
         if data_list.len() > 5 {
-            analysis.push_str(&format!("... 还有 {} 个交易对\n", data_list.len() - 5));
+            analysis.push_str(&format!("... and {} more trading pairs\n", data_list.len() - 5));
         }
 
         analysis
     }
 }
 
-// ==================== 模式识别器 ====================
+// ==================== Pattern Recognizer ====================
 
-/// 模式识别器
+/// Pattern recognizer
 ///
-/// 识别市场数据中的模式和趋势
+/// Identifies patterns and trends in market data
 pub struct PatternRecognizer;
 
 impl PatternRecognizer {
-    /// 识别趋势模式
+    /// Recognize trend pattern
     pub fn recognize_trend(data: &MarketData) -> Option<String> {
         if data.candles.len() < 2 {
             return None;
@@ -209,19 +209,19 @@ impl PatternRecognizer {
         let change = data.price_change_pct;
 
         if change > 10.0 {
-            Some(format!("强势上涨 (+{:.1}%)", change))
+            Some(format!("Strong upward trend (+{:.1}%)", change))
         } else if change > 5.0 {
-            Some(format!("温和上涨 (+{:.1}%)", change))
+            Some(format!("Moderate upward trend (+{:.1}%)", change))
         } else if change < -10.0 {
-            Some(format!("强势下跌 ({:.1}%)", change))
+            Some(format!("Strong downward trend ({:.1}%)", change))
         } else if change < -5.0 {
-            Some(format!("温和下跌 ({:.1}%)", change))
+            Some(format!("Moderate downward trend ({:.1}%)", change))
         } else {
-            Some(format!("横盘震荡 ({:.1}%)", change))
+            Some(format!("Sideways movement ({:.1}%)", change))
         }
     }
 
-    /// 识别波动性
+    /// Recognize volatility
     pub fn recognize_volatility(data: &MarketData) -> Option<String> {
         if data.candles.len() < 2 {
             return None;
@@ -232,15 +232,15 @@ impl PatternRecognizer {
             .sum::<f64>() / data.candles.len() as f64 * 100.0;
 
         if volatility > 5.0 {
-            Some(format!("高波动性 ({:.1}%)", volatility))
+            Some(format!("High volatility ({:.1}%)", volatility))
         } else if volatility > 2.0 {
-            Some(format!("中等波动性 ({:.1}%)", volatility))
+            Some(format!("Medium volatility ({:.1}%)", volatility))
         } else {
-            Some(format!("低波动性 ({:.1}%)", volatility))
+            Some(format!("Low volatility ({:.1}%)", volatility))
         }
     }
 
-    /// 识别突破模式
+    /// Recognize breakout pattern
     pub fn recognize_breakout(data: &MarketData) -> Option<String> {
         if data.candles.len() < 5 {
             return None;
@@ -252,9 +252,9 @@ impl PatternRecognizer {
             .map(|c| c.high).fold(0.0f64, f64::max);
 
         if recent_high > previous_high * 1.02 {
-            Some("向上突破".to_string())
+            Some("Upward breakout".to_string())
         } else if recent_high < previous_high * 0.98 {
-            Some("向下突破".to_string())
+            Some("Downward breakout".to_string())
         } else {
             None
         }
@@ -263,20 +263,20 @@ impl PatternRecognizer {
 
 // ==================== Discovery Agent ====================
 
-/// 策略发现 Agent
+/// Discovery Agent
 ///
-/// 负责发现交易机会，生成分析报告
+/// Responsible for discovering trading opportunities and generating analysis reports
 pub struct DiscoveryAgent {
     /// LLM Gateway
     llm_gateway: Arc<LLMGateway>,
-    /// 通知渠道
+    /// Notification channels
     channels: RwLock<Vec<Arc<dyn Channel>>>,
-    /// Agent 名称
+    /// Agent name
     name: String,
 }
 
 impl DiscoveryAgent {
-    /// 创建新的 Discovery Agent
+    /// Create new Discovery Agent
     pub fn new(llm_gateway: Arc<LLMGateway>) -> Self {
         Self {
             llm_gateway,
@@ -285,53 +285,53 @@ impl DiscoveryAgent {
         }
     }
 
-    /// 添加通知渠道
+    /// Add notification channel
     pub async fn add_channel(&self, channel: Arc<dyn Channel>) {
         let mut channels = self.channels.write().await;
         channels.push(channel);
     }
 
-    /// 执行策略发现
+    /// Execute strategy discovery
     async fn discover_strategy(&self, data: &MarketData) -> Result<AnalysisReport> {
-        // 1. 分析市场数据
+        // 1. Analyze market data
         let analysis = Analyzer::analyze_market_data(data);
 
-        // 2. 识别模式
+        // 2. Recognize patterns
         let trend = PatternRecognizer::recognize_trend(data);
         let volatility = PatternRecognizer::recognize_volatility(data);
         let breakout = PatternRecognizer::recognize_breakout(data);
 
-        // 3. 构建提示词
+        // 3. Build prompt
         let prompt = self.build_discovery_prompt(&analysis, &trend, &volatility, &breakout);
 
-        // 4. 调用 LLM 分析
+        // 4. Call LLM for analysis
         let messages = vec![
-            Message::system("你是一个专业的量化交易策略分析师。"),
+            Message::system("You are a professional quantitative trading strategy analyst."),
             Message::user(prompt),
         ];
 
         let response = self.llm_gateway.chat(&messages).await?;
 
-        // 5. 解析结果并生成报告
+        // 5. Parse result and generate report
         let report = self.parse_discovery_response(&response.content, data);
 
         Ok(report)
     }
 
-    /// 执行信号分析
+    /// Execute signal analysis
     async fn analyze_signal(&self, signal: &Signal) -> Result<AnalysisReport> {
         let prompt = format!(
-            "请分析以下交易信号：\n\n\
-            信号ID: {}\n\
-            策略: {}\n\
-            类型: {:?}\n\
-            交易对: {}\n\
-            描述: {}\n\
-            数据: {}\n\n\
-            请提供：\n\
-            1. 信号质量评估\n\
-            2. 潜在风险点\n\
-            3. 执行建议",
+            "Please analyze the following trading signal:\n\n\
+            Signal ID: {}\n\
+            Strategy: {}\n\
+            Type: {:?}\n\
+            Trading Pair: {}\n\
+            Description: {}\n\
+            Data: {}\n\n\
+            Please provide:\n\
+            1. Signal quality assessment\n\
+            2. Potential risk points\n\
+            3. Execution recommendations",
             signal.id,
             signal.strategy_name,
             signal.signal_type,
@@ -341,14 +341,14 @@ impl DiscoveryAgent {
         );
 
         let messages = vec![
-            Message::system("你是一个专业的交易信号分析师。"),
+            Message::system("You are a professional trading signal analyst."),
             Message::user(prompt),
         ];
 
         let response = self.llm_gateway.chat(&messages).await?;
 
         let report = AnalysisReport::new(AgentTaskType::AnalyzeSignal)
-            .with_summary(format!("信号分析完成: {}", signal.inst_id))
+            .with_summary(format!("Signal analysis completed: {}", signal.inst_id))
             .add_finding(Finding {
                 opportunity_type: "SignalAnalysis".to_string(),
                 confidence: 0.8,
@@ -361,36 +361,36 @@ impl DiscoveryAgent {
             .add_recommendation(Recommendation {
                 action_type: "Review".to_string(),
                 priority: "medium".to_string(),
-                description: "请仔细审查信号分析结果".to_string(),
-                expected_outcome: "做出明智的交易决策".to_string(),
+                description: "Please carefully review the signal analysis results".to_string(),
+                expected_outcome: "Make informed trading decisions".to_string(),
             });
 
         Ok(report)
     }
 
-    /// 执行模式识别
+    /// Execute pattern recognition
     async fn recognize_pattern(&self, data_list: &[MarketData]) -> Result<AnalysisReport> {
         let analysis = Analyzer::analyze_multiple_data(data_list);
 
         let prompt = format!(
-            "请分析以下多个交易对的市场数据，识别共同模式：\n\n{}\n\n\
-            请识别：\n\
-            1. 市场整体趋势\n\
-            2. 板块轮动模式\n\
-            3. 相关性分析\n\
-            4. 潜在套利机会",
+            "Please analyze the following multiple trading pairs' market data and identify common patterns:\n\n{}\n\n\
+            Please identify:\n\
+            1. Overall market trend\n\
+            2. Sector rotation patterns\n\
+            3. Correlation analysis\n\
+            4. Potential arbitrage opportunities",
             analysis
         );
 
         let messages = vec![
-            Message::system("你是一个专业的市场模式识别专家。"),
+            Message::system("You are a professional market pattern recognition expert."),
             Message::user(prompt),
         ];
 
         let response = self.llm_gateway.chat(&messages).await?;
 
         let report = AnalysisReport::new(AgentTaskType::RecognizePattern)
-            .with_summary(format!("模式识别完成: 分析了 {} 个交易对", data_list.len()))
+            .with_summary(format!("Pattern recognition completed: analyzed {} trading pairs", data_list.len()))
             .add_finding(Finding {
                 opportunity_type: "PatternRecognition".to_string(),
                 confidence: 0.75,
@@ -403,7 +403,7 @@ impl DiscoveryAgent {
         Ok(report)
     }
 
-    /// 构建策略发现提示词
+    /// Build strategy discovery prompt
     fn build_discovery_prompt(
         &self,
         analysis: &str,
@@ -412,35 +412,35 @@ impl DiscoveryAgent {
         breakout: &Option<String>,
     ) -> String {
         let mut prompt = format!(
-            "请分析以下市场数据，发现潜在的交易机会：\n\n{}\n",
+            "Please analyze the following market data and identify potential trading opportunities:\n\n{}\n",
             analysis
         );
 
         if let Some(t) = trend {
-            prompt.push_str(&format!("\n趋势识别: {}\n", t));
+            prompt.push_str(&format!("\nTrend Recognition: {}\n", t));
         }
         if let Some(v) = volatility {
-            prompt.push_str(&format!("波动性: {}\n", v));
+            prompt.push_str(&format!("Volatility: {}\n", v));
         }
         if let Some(b) = breakout {
-            prompt.push_str(&format!("突破模式: {}\n", b));
+            prompt.push_str(&format!("Breakout Pattern: {}\n", b));
         }
 
-        prompt.push_str("\n请提供：\n");
-        prompt.push_str("1. 交易机会评估\n");
-        prompt.push_str("2. 建议策略类型\n");
-        prompt.push_str("3. 风险等级评估\n");
-        prompt.push_str("4. 具体操作建议\n");
+        prompt.push_str("\nPlease provide:\n");
+        prompt.push_str("1. Trading opportunity assessment\n");
+        prompt.push_str("2. Recommended strategy type\n");
+        prompt.push_str("3. Risk level assessment\n");
+        prompt.push_str("4. Specific operation recommendations\n");
 
         prompt
     }
 
-    /// 解析 LLM 响应
+    /// Parse LLM response
     fn parse_discovery_response(&self, response: &str, data: &MarketData) -> AnalysisReport {
-        // 简化实现：直接构建报告
-        // 实际应用中可以使用 JSON 解析响应
+        // Simplified implementation: directly build report
+        // In production, can use JSON to parse response
         AnalysisReport::new(AgentTaskType::DiscoverStrategy)
-            .with_summary(format!("策略发现: {}", data.inst_id))
+            .with_summary(format!("Strategy discovery: {}", data.inst_id))
             .add_finding(Finding {
                 opportunity_type: "MarketAnalysis".to_string(),
                 confidence: 0.7,
@@ -457,8 +457,8 @@ impl DiscoveryAgent {
                 } else {
                     "medium".to_string()
                 },
-                description: "持续监控该交易对".to_string(),
-                expected_outcome: "捕捉交易机会".to_string(),
+                description: "Continue monitoring this trading pair".to_string(),
+                expected_outcome: "Capture trading opportunities".to_string(),
             })
     }
 }
@@ -491,36 +491,36 @@ impl Agent for DiscoveryAgent {
     }
 }
 
-// ==================== Agent 管理器 ====================
+// ==================== Agent Manager ====================
 
-/// Agent 管理器
+/// Agent manager
 ///
-/// 管理所有 Agent 实例，负责任务分发
+/// Manages all Agent instances, responsible for task distribution
 pub struct AgentManager {
     agents: RwLock<HashMap<String, Arc<dyn Agent>>>,
 }
 
 impl AgentManager {
-    /// 创建新的 Agent 管理器
+    /// Create new Agent manager
     pub fn new() -> Self {
         Self {
             agents: RwLock::new(HashMap::new()),
         }
     }
 
-    /// 注册 Agent
+    /// Register Agent
     pub async fn register_agent(&self, name: String, agent: Arc<dyn Agent>) {
         let mut agents = self.agents.write().await;
         agents.insert(name, agent);
     }
 
-    /// 获取 Agent
+    /// Get Agent
     pub async fn get_agent(&self, name: &str) -> Option<Arc<dyn Agent>> {
         let agents = self.agents.read().await;
         agents.get(name).cloned()
     }
 
-    /// 异步执行任务（不等待结果）
+    /// Execute task asynchronously (no wait for result)
     pub async fn spawn_task(&self, agent_name: &str, task: AgentTask) {
         let agent = match self.get_agent(agent_name).await {
             Some(a) => a,
@@ -530,7 +530,7 @@ impl AgentManager {
             }
         };
 
-        // 异步 spawn，不等待结果
+        // Async spawn, no wait for result
         tokio::spawn(async move {
             match agent.execute(task).await {
                 Ok(report) => {
@@ -553,12 +553,12 @@ impl Default for AgentManager {
     }
 }
 
-// ==================== 测试 ====================
+// ==================== Tests ====================
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cluebot_engine::{Candle, SignalType};
+    use cluebot_engine::Candle;
 
     fn create_test_market_data() -> MarketData {
         MarketData {
@@ -600,7 +600,7 @@ mod tests {
         let data = create_test_market_data();
         let trend = PatternRecognizer::recognize_trend(&data);
         assert!(trend.is_some());
-        assert!(trend.unwrap().contains("上涨"));
+        assert!(trend.unwrap().contains("upward"));
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod tests {
     async fn test_agent_manager() {
         let manager = AgentManager::new();
         
-        // 创建 mock agent
+        // Create mock agent
         struct MockAgent;
         
         #[async_trait]

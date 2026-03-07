@@ -9,6 +9,6 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-anyhow = "1"
-async-trait = "0.1"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }

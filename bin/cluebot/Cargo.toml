@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+dotenvy = { workspace = true }
+cluebot-runtime = { workspace = true }
+cluebot-engine = { workspace = true }
+cluebot-okx = { workspace = true }
+cluebot-email = { workspace = true }
+volatility-increase-short-selling = { workspace = true }
