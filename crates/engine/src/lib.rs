@@ -8,6 +8,30 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration};
 
+// ==================== Agent 任务类型（供 Agent 层使用）====================
+
+/// Agent 任务类型
+/// 
+/// 定义了 Engine 可以异步触发给 Agent 层的任务类型
+#[derive(Debug, Clone)]
+pub enum AgentTask {
+    /// 策略发现 - 分析市场数据发现交易机会
+    DiscoverStrategy(MarketData),
+    /// 信号分析 - 分析特定交易信号
+    AnalyzeSignal(Signal),
+    /// 模式识别 - 识别历史模式
+    RecognizePattern(Vec<MarketData>),
+}
+
+/// Agent 任务处理器 trait
+/// 
+/// 由 Agent 层实现，Engine 通过此 trait 异步触发任务
+#[async_trait]
+pub trait AgentTaskHandler: Send + Sync {
+    /// 异步处理任务（不返回结果）
+    async fn handle_task(&self, task: AgentTask);
+}
+
 // ==================== Trait 定义 ====================
 
 /// 策略 trait - 定义策略的通用接口
@@ -451,6 +475,8 @@ struct EngineInner {
     monitor: Monitor,
     /// 通知渠道
     channels: RwLock<Vec<Arc<dyn Channel>>>,
+    /// Agent 任务处理器
+    agent_handler: RwLock<Option<Arc<dyn AgentTaskHandler>>>,
     /// 当前状态
     state: RwLock<RuntimeState>,
 }
@@ -471,6 +497,7 @@ impl Engine {
                 scheduler: Scheduler::new(),
                 monitor: Monitor::new(),
                 channels: RwLock::new(Vec::new()),
+                agent_handler: RwLock::new(None),
                 state: RwLock::new(RuntimeState::Initialized),
             }),
         }
@@ -555,13 +582,37 @@ impl Engine {
         *inner.state.read().await
     }
 
+    /// 设置 Agent 任务处理器
+    ///
+    /// # Arguments
+    /// * `handler` - Agent 任务处理器
+    pub async fn set_agent_handler(&self, handler: Arc<dyn AgentTaskHandler>) {
+        let inner = self.inner.read().await;
+        let mut agent_handler = inner.agent_handler.write().await;
+        *agent_handler = Some(handler);
+    }
+
     /// 异步触发 Agent 任务（不等待结果）
     ///
     /// 根据设计文档，Engine 通过 spawn 异步触发 Agent 任务，立即返回
-    pub async fn spawn_agent_task<T>(&self, _task: T) {
-        // TODO: 第四阶段实现 Agent 层时完善
-        // 当前仅作为接口预留
-        println!("Agent task spawned (to be implemented in Phase 4)");
+    ///
+    /// # Arguments
+    /// * `task` - Agent 任务
+    pub async fn spawn_agent_task(&self, task: AgentTask) {
+        let inner = self.inner.read().await;
+        let handler = inner.agent_handler.read().await.clone();
+        
+        match handler {
+            Some(h) => {
+                // 异步 spawn，不等待结果
+                tokio::spawn(async move {
+                    h.handle_task(task).await;
+                });
+            }
+            None => {
+                eprintln!("Agent handler not set, task {:?} dropped", task);
+            }
+        }
     }
 }
 
