@@ -10,9 +10,7 @@ exclude = [".github/"]
 
 [workspace]
 members = [
-    "bin/cluebot"
-
-, "crates/agent/discovery-strategy", "crates/agent/llm", "crates/agent/strategy-creation", "crates/engine", "crates/extensions/email", "crates/extensions/lark", "crates/extensions/okx", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
+    "bin/cluebot", "crates/agent/discovery-strategy", "crates/agent/strategy-creation", "crates/agent/strategy-optimization", "crates/engine", "crates/extensions/markets/binance", "crates/extensions/channels/email", "crates/extensions/channels/lark", "crates/extensions/markets/okx", "crates/llm-gateway", "crates/runtime", "crates/strategies/volatility-increase-short-selling"]
 default-members = ["bin/cluebot"]
 
 [workspace.dependencies]

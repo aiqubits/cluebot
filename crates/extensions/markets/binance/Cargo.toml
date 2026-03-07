@@ -1,5 +1,5 @@
 [package]
-name = "cluebot-runtime"
+name = "cluebot-binance"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -9,6 +9,3 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-anyhow = "1"
-async-trait = "0.1"
