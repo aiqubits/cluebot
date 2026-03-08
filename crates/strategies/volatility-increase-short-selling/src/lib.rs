@@ -18,6 +18,8 @@ pub struct VolatilityStrategyConfig {
     pub bar: String,
     /// 获取 K 线数量
     pub limit: u32,
+    /// 每次执行检查的最大币种数量 (0 表示检查所有)
+    pub max_coins_to_check: usize,
 }
 
 impl Default for VolatilityStrategyConfig {
@@ -28,6 +30,7 @@ impl Default for VolatilityStrategyConfig {
             min_candles: 8,
             bar: "1H".to_string(),
             limit: 8,
+            max_coins_to_check: 0, // 默认检查所有币种
         }
     }
 }
@@ -41,6 +44,7 @@ impl VolatilityStrategyConfig {
             min_candles: 10,
             bar: "4H".to_string(),
             limit: 12,
+            max_coins_to_check: 0,
         }
     }
 
@@ -52,6 +56,7 @@ impl VolatilityStrategyConfig {
             min_candles: 5,
             bar: "1H".to_string(),
             limit: 8,
+            max_coins_to_check: 50, // 激进模式下检查前50个币种
         }
     }
 }
@@ -163,6 +168,7 @@ impl VolatilityIncreaseShortSellingStrategy {
             })
             .collect();
 
+        // 至少需要2个收益率才能计算标准差（样本方差分母为 n-1）
         if returns.len() < 2 {
             return 0.0;
         }
@@ -178,6 +184,10 @@ impl VolatilityIncreaseShortSellingStrategy {
             / (returns.len() - 1) as f64;
 
         // 标准差即为波动率，转为百分比
+        // 防止负数方差（浮点精度问题）导致 NaN
+        if variance < 0.0 {
+            return 0.0;
+        }
         variance.sqrt() * 100.0
     }
 
@@ -379,9 +389,13 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
         // 收集所有币种的数据用于排序展示
         let mut coin_data: Vec<(String, f64, f64, usize, usize)> = Vec::new();
         
-        // 遍历共同币种（先检查前30个币种，用于快速测试）
-        let check_count = std::cmp::min(30, common_coins.len());
-        println!("[DEBUG] 本次检查前 {} 个币种", check_count);
+        // 根据配置决定检查的币种数量
+        let check_count = if self.config.max_coins_to_check == 0 {
+            common_coins.len() // 检查所有币种
+        } else {
+            std::cmp::min(self.config.max_coins_to_check, common_coins.len())
+        };
+        println!("[DEBUG] 本次检查前 {} 个币种 (共 {} 个)", check_count, common_coins.len());
         for coin in common_coins.iter().take(check_count) {
             let spot_id = &spot_map[coin];
             let swap_id = &swap_map[coin];
