@@ -257,8 +257,13 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "demo"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "cluebot-email",
+ "cluebot-engine",
+ "dotenvy",
  "reqwest 0.11.27",
  "serde",
+ "tokio",
 ]
 
 [[package]]

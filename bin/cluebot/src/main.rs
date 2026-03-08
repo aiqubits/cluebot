@@ -81,13 +81,19 @@ async fn main() -> Result<()> {
     // 9. Create OKX market client
     let okx = Arc::new(OkxMarket::new());
 
-    // 10. Load volatility short-selling strategy
-    let price_change_threshold: f64 = 10.0;
-    let volatility_threshold: f64 = 0.0; // 设为0，不限制波动率，只检查涨幅
-    let min_candles: usize = 2; // 至少需要2根K线才能计算涨跌幅
-    let bar: String = "1H".to_string();
-    let limit: u32 = 8;
-    let max_coins_to_check: usize = 0; // 0 表示检查所有币种
+    // 10. Load volatility short-selling strategy config from environment variables
+    let price_change_threshold: f64 = env::var("VOLATILITY_PRICE_CHANGE_THRESHOLD")
+        .unwrap_or_else(|_| "5.0".to_string()).parse::<f64>()?;
+    let volatility_threshold: f64 = env::var("VOLATILITY_VOLATILITY_THRESHOLD")
+        .unwrap_or_else(|_| "0.0".to_string()).parse::<f64>()?;
+    let min_candles: usize = env::var("VOLATILITY_MIN_CANDLES")
+        .unwrap_or_else(|_| "2".to_string()).parse::<usize>()?;
+    let bar: String = env::var("VOLATILITY_BAR")
+        .unwrap_or_else(|_| "1H".to_string());
+    let limit: u32 = env::var("VOLATILITY_LIMIT")
+        .unwrap_or_else(|_| "8".to_string()).parse::<u32>()?;
+    let max_coins_to_check: usize = env::var("VOLATILITY_MAX_COINS_TO_CHECK")
+        .unwrap_or_else(|_| "0".to_string()).parse::<usize>()?;
     let strategy = Arc::new(VolatilityIncreaseShortSellingStrategy::new(
         volatility_increase_short_selling::VolatilityStrategyConfig {
             price_change_threshold,
@@ -112,9 +118,11 @@ async fn main() -> Result<()> {
     println!("Engine started\n");
 
     // 12. Use Engine scheduler to execute strategy periodically
+    let scan_interval_secs: u64 = env::var("SCAN_INTERVAL_SECS")
+        .unwrap_or_else(|_| "1800".to_string()).parse::<u64>()?;
     engine.schedule_repeating(
         cluebot_engine::TaskType::CheckConditions,
-        Duration::from_secs(1800), // Execute every 60 seconds
+        Duration::from_secs(scan_interval_secs), // Execute every scan_interval_secs seconds
         {
             let engine = engine.clone();
             let okx = okx.clone();
