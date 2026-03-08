@@ -87,6 +87,7 @@ async fn main() -> Result<()> {
     let min_candles: usize = 2; // 至少需要2根K线才能计算涨跌幅
     let bar: String = "1H".to_string();
     let limit: u32 = 8;
+    let max_coins_to_check: usize = 0; // 0 表示检查所有币种
     let strategy = Arc::new(VolatilityIncreaseShortSellingStrategy::new(
         volatility_increase_short_selling::VolatilityStrategyConfig {
             price_change_threshold,
@@ -94,6 +95,7 @@ async fn main() -> Result<()> {
             min_candles,
             bar: bar.clone(),
             limit,
+            max_coins_to_check,
         }
     ));
     engine.load_strategy(strategy).await?;
@@ -103,6 +105,7 @@ async fn main() -> Result<()> {
     println!("  Min Candles: {}", min_candles);
     println!("  Bar: {}", bar);
     println!("  Limit: {}", limit);
+    println!("  Max Coins To Check: {} (0 means all)", max_coins_to_check);
 
     // 11. Start Runtime
     runtime.start().await?;

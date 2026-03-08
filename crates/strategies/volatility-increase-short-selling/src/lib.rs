@@ -474,7 +474,7 @@ impl Strategy for VolatilityIncreaseShortSellingStrategy {
         println!("\n[DEBUG] ===== 币种涨幅排行 (前20) =====");
         println!("{:<10} {:>12} {:>12} {:>8} {:>8}", "币种", "现货涨幅%", "永续涨幅%", "现货K线", "永续K线");
         println!("{}", "-".repeat(60));
-        for (i, (coin, spot_chg, swap_chg, spot_k, swap_k)) in coin_data.iter().take(20).enumerate() {
+        for (_i, (coin, spot_chg, swap_chg, spot_k, swap_k)) in coin_data.iter().take(20).enumerate() {
             let marker = if *spot_chg > self.config.price_change_threshold && *swap_chg > self.config.price_change_threshold {
                 " <-- 符合条件"
             } else {
